@@ -18,7 +18,6 @@ import com.google.gson.internal.Excluder;
 import com.google.gson.internal.LinkedTreeMap;
 import com.google.gson.internal.ObjectConstructor;
 import com.google.gson.internal.bind.TreeTypeAdapter;
-import com.google.gson.internal.reflect.ReflectionAccessor;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 
@@ -72,15 +71,9 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
         List<BoundField> fields = getFields(typeOfT);
         ObjectConstructor<T> constructor = constructorConstructor.get(typeToken);
         T instance = constructor.construct();
-        try {
-            for (BoundField boundField : fields) {
-                JsonElement jsonElement = getJsonElement(members, boundField);
-                injectObjectContent(instance, boundField, jsonElement);
-            }
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+        for (BoundField boundField : fields) {
+            JsonElement jsonElement = getJsonElement(members, boundField);
+            injectObjectContent(instance, boundField, jsonElement);
         }
         return instance;
     }
@@ -96,12 +89,12 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
         if (contextFields.length < 1) {
             return;
         }
-        ReflectionAccessor.getInstance().makeAccessible(contextFields[0]);
+        contextFields[0].setAccessible(true);
         Class<?> declaringClass = contextClass.getDeclaringClass();
         try {
             Object object = contextFields[0].get(context);
             Field gsonField = declaringClass.getDeclaredField("gson");
-            ReflectionAccessor.getInstance().makeAccessible(gsonField);
+            gsonField.setAccessible(true);
             gson = (Gson) gsonField.get(object);
         } catch (NoSuchFieldException e) {
             e.printStackTrace();
@@ -125,7 +118,7 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
         try {
             JsonObject asJsonObject = json.getAsJsonObject();
             Field field = asJsonObject.getClass().getDeclaredField("members");
-            ReflectionAccessor.getInstance().makeAccessible(field);
+            field.setAccessible(true);
             members = (LinkedTreeMap<String, JsonElement>) field.get(asJsonObject);
         } catch (NoSuchFieldException e) {
             e.printStackTrace();
@@ -143,13 +136,18 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
      * @param jsonElement
      * @throws IllegalAccessException
      */
-    private void injectObjectContent(Object instance, BoundField boundField, JsonElement jsonElement) throws IllegalAccessException, IOException {
+    private void injectObjectContent(Object instance, BoundField boundField, JsonElement jsonElement) {
         Field field = boundField.field;
         if (jsonElement == null) {
             return;
         }
-        Object object = getFieldValue(field.getGenericType(), jsonElement);
-        field.set(instance, object);
+        try {
+            field.set(instance, getFieldValue(field.getGenericType(), jsonElement));
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -161,28 +159,64 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
      * @throws IllegalAccessException
      */
     @SuppressWarnings({"unchecked"})
-    private Object getFieldValue(Type componentType, JsonElement jsonElement) throws IllegalAccessException, IOException {
+    private Object getFieldValue(Type componentType, JsonElement jsonElement) throws IOException {
         TypeToken<?> typeToken = TypeToken.get(componentType);
         ReflectHelp me = ReflectHelp.deal(typeToken.getRawType());
         if (jsonElement.isJsonPrimitive()) {
             if (me.isByte()) {
-                return jsonElement.getAsByte();
+                try {
+                    return jsonElement.getAsByte();
+                } catch (Exception e) {
+                    return 0;
+                }
             } else if (me.isShort()) {
-                return jsonElement.getAsShort();
+                try {
+                    return jsonElement.getAsShort();
+                } catch (Exception e) {
+                    return 0;
+                }
             } else if (me.isChar()) {
-                return jsonElement.getAsCharacter();
+                try {
+                    return jsonElement.getAsCharacter();
+                } catch (Exception e) {
+                    return '\u0000';
+                }
             } else if (me.isInt()) {
-                return jsonElement.getAsInt();
+                try {
+                    return jsonElement.getAsInt();
+                } catch (Exception e) {
+                    return 0;
+                }
             } else if (me.isLong()) {
-                return jsonElement.getAsLong();
+                try {
+                    return jsonElement.getAsLong();
+                } catch (Exception e) {
+                    return 0L;
+                }
             } else if (me.isFloat()) {
-                return jsonElement.getAsFloat();
+                try {
+                    return jsonElement.getAsFloat();
+                } catch (Exception e) {
+                    return 0.0f;
+                }
             } else if (me.isDouble()) {
-                return jsonElement.getAsDouble();
+                try {
+                    return jsonElement.getAsDouble();
+                } catch (Exception e) {
+                    return 0.0d;
+                }
             } else if (me.isBoolean()) {
-                return jsonElement.getAsBoolean();
+                try {
+                    return jsonElement.getAsBoolean();
+                } catch (Exception e) {
+                    return false;
+                }
             } else if (me.isString()) {
-                return jsonElement.getAsString();
+                try {
+                    return jsonElement.getAsString();
+                } catch (Exception e) {
+                    return null;
+                }
             }
 //            else if (me.isObj()) {//如果一个对象对应的值不是Object而是""空字符串，可让""转为null
 //                if (jsonElement.getAsString().equals("") && getEnableEmpty(boundField.field)) {
@@ -190,7 +224,12 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
 //                }
 //            }
         } else if (jsonElement.isJsonArray()) {
-            JsonArray asJsonArray = jsonElement.getAsJsonArray();
+            JsonArray asJsonArray;
+            try {
+                asJsonArray = jsonElement.getAsJsonArray();
+            } catch (Exception e) {
+                return null;
+            }
             if (asJsonArray != null && asJsonArray.size() > 0) {
                 if (me.isArray()) {
                     Type arrayComponentType = $Gson$Types.getArrayComponentType(componentType);
@@ -219,7 +258,12 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
                 }
             }
         } else if (jsonElement.isJsonObject() && me.isObject()) {
-            JsonObject asJsonObject = jsonElement.getAsJsonObject();
+            JsonObject asJsonObject;
+            try {
+                asJsonObject = jsonElement.getAsJsonObject();
+            } catch (Exception e) {
+                return null;
+            }
             LinkedTreeMap<String, JsonElement> members;
             if (asJsonObject != null && asJsonObject.size() > 0) {
                 if (me.isMap()) {
@@ -375,7 +419,7 @@ public class IllegalJsonDeserializer<T> implements JsonDeserializer<T> {
             if (!deserialize) {
                 continue;
             }
-            ReflectionAccessor.getInstance().makeAccessible(field);
+            field.setAccessible(true);
             List<String> fieldNames = getFieldNames(field);
             for (int i = 0, size = fieldNames.size(); i < size; ++i) {
                 if (previous.contains(fieldNames.get(i))) {
