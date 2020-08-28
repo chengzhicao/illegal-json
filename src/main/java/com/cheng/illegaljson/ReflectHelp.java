@@ -90,7 +90,7 @@ public class ReflectHelp<T> {
     }
 
     /**
-     * 是否是一个实体对象
+     * 是否是一个实体对象(包含容器)
      *
      * @return
      */
@@ -123,10 +123,10 @@ public class ReflectHelp<T> {
     }
 
     /**
-     * @return 当前对象是否为原生的数字类型 （即不包括 boolean 和 char）
+     * @return 当前对象是否为原生类型
      */
-    public boolean isPrimitiveNumber() {
-        return isInt() || isLong() || isFloat() || isDouble() || isByte() || isShort();
+    public boolean isPrimitive() {
+        return isInt() || isLong() || isFloat() || isDouble() || isByte() || isShort() || isBoolean() || isChar();
     }
 
     /**
@@ -141,16 +141,7 @@ public class ReflectHelp<T> {
      * @return true or false
      */
     private boolean isPojo() {
-        if (tClass.isPrimitive() || isEnum())
-            return false;
-
-        if (isStringLike() || isDateTimeLike())
-            return false;
-
-        if (isPrimitiveNumber() || isBoolean() || isChar())
-            return false;
-
-        return !isContainer();
+        return !isPrimitive() && !isEnum() && !isStringLike() && !isDateTimeLike() && !isContainer();
     }
 
     public boolean is(Class<?> tClass) {
